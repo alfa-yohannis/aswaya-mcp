@@ -10,6 +10,7 @@ sengaja dikarang.
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -335,6 +336,7 @@ class SitusTiruan:
         self.maks_section = 52
         self.ajax_galat_berikutnya: list[str] = []
         self.id_section_berikutnya = 8100
+        self.galat_form_section = ""  # diisi: POST editsection.php menampilkan form lagi dengan pesan ini
         self.berkas = {
             "/webservice/pluginfile.php/88/mod_resource/content/1/slide-html.pdf": (b"%PDF-1.4 slide karangan", "application/pdf"),
             "/webservice/pluginfile.php/90/assignsubmission_file/submission_files/1/profil-peter.zip": (b"PK zip karangan", "application/zip"),
@@ -700,6 +702,8 @@ class SitusTiruan:
             return self.halaman_moodle(alamat, f"<h1>{kursus['fullname']}</h1>", f"format-{kursus['format']} course-{kursus['id']}")
         if path == "/course/changenumsections.php":
             return self.changenumsections(alamat, query)
+        if path == "/course/editsection.php":
+            return self.editsection(metode, alamat, query, isian)
         if path == self.hambatan_login:
             return self.halaman_moodle(alamat, "<h1>Langkah tambahan</h1>")
         return JawabanTiruan(alamat, 404, teks="Not found")
@@ -739,6 +743,44 @@ class SitusTiruan:
                                "visible": 1, "summary": "", "modules": [], "_tanpa_nama": True})
                 self.id_section_berikutnya += 1
         return JawabanTiruan(alamat, 303, lokasi=f"{SITUS}/course/view.php?id={kursus_id}#section-{terakhir + 1}")
+
+    def editsection(self, metode: str, alamat: str, query: dict, isian: dict):
+        """course/editsection.php: form editsection_form, lalu simpan summary_editor[text] dan kembali ke kursus."""
+        section_id = int((isian if metode == "POST" else query).get("id", 0))
+        for kursus_id, daftar in self.data["section"].items():
+            section = next((satu for satu in daftar if satu["id"] == section_id), None)
+            if section is not None:
+                break
+        else:
+            return JawabanTiruan(alamat, 404, teks="Can't find data record in database table course_sections.")
+        if metode == "POST":
+            if isian.get("sesskey") != self.sesskey:
+                return self.halaman_moodle(alamat, "<p>Incorrect sesskey submitted, form not accepted!</p>")
+            if self.galat_form_section:
+                return self.halaman_moodle(alamat, self.form_section(kursus_id, section, self.galat_form_section))
+            section["summary"] = isian["summary_editor[text]"]
+            section["summaryformat"] = int(isian["summary_editor[format]"])
+            return JawabanTiruan(alamat, 303, lokasi=f"{SITUS}/course/view.php?id={kursus_id}#section-{section['section']}")
+        return self.halaman_moodle(alamat, self.form_section(kursus_id, section))
+
+    def form_section(self, kursus_id: int, section: dict, galat: str = "") -> str:
+        """Form edit section seperti Moodle 4.5, dengan ringkasan lama di editor."""
+        ringkasan = html.escape(section.get("summary") or "")
+        blok_galat = f'<div class="invalid-feedback" id="id_error_summary_editor">{galat}</div>' if galat else ""
+        return (
+            f'<form autocomplete="off" action="{SITUS}/course/editsection.php" method="post" id="mform1_karangan">'
+            f'<input name="id" type="hidden" value="{section['id']}"><input name="sr" type="hidden" value="0">'
+            f'<input name="id" type="hidden" value="{section['id']}"><input name="course" type="hidden" value="{kursus_id}">'
+            f'<input name="sesskey" type="hidden" value="{self.sesskey}">'
+            '<input name="_qf__editsection_form" type="hidden" value="1">'
+            '<input type="text" name="name" id="id_name" value="">'
+            f'<textarea id="id_summary_editor" name="summary_editor[text]">{ringkasan}</textarea>{blok_galat}'
+            '<input type="hidden" name="summary_editor[format]" value="1">'
+            '<input type="hidden" name="summary_editor[itemid]" value="113051269">'
+            '<textarea name="availabilityconditionsjson">{"op":"&amp;","c":[],"showc":[]}</textarea>'
+            '<input type="submit" name="submitbutton" value="Save changes">'
+            '<input type="submit" name="cancel" value="Cancel"></form>'
+        )
 
     def ajax_php(self, alamat: str, query: dict, badan):
         """lib/ajax/service.php: periksa login dan sesskey, lalu jalankan core_update_inplace_editable."""

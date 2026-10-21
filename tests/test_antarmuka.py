@@ -33,7 +33,10 @@ TOOL_BACA = {
     "cek_login", "daftar_kursus", "isi_kursus", "peserta_kursus", "daftar_tugas", "pengumpulan_tugas",
     "nilai_kursus", "daftar_forum", "diskusi_forum", "tenggat", "unduh_berkas", "daftar_section", "fungsi_tersedia",
 }
-TOOL_TULIS = {"panggil_fungsi", "kirim_pengumuman", "beri_nilai", "kirim_pesan", "tambah_section", "ubah_nama_section"}
+TOOL_TULIS = {
+    "panggil_fungsi", "kirim_pengumuman", "beri_nilai", "kirim_pesan", "tambah_section", "ubah_nama_section",
+    "ubah_ringkasan_section",
+}
 
 
 # --- CLI -------------------------------------------------------------------
@@ -204,6 +207,16 @@ def test_cli_ubah_nama_section(situs, kredensial_di_setelan, capsys):
     assert "nama_lama: Session 03" in capsys.readouterr().out
 
 
+def test_cli_ubah_ringkasan_section(situs, kredensial_di_setelan, capsys):
+    tautan = "https://drive.google.com/file/d/contoh/view"
+    assert cli.main_ubah_ringkasan_section([str(KURSUS_WEB), "9000", "--isi", f"Slides: {tautan}"]) == 0
+    assert "Uji coba" in capsys.readouterr().out
+    assert cli.main_ubah_ringkasan_section([str(KURSUS_WEB), "9000", "--isi", f"Slides: {tautan}", "--kirim"]) == 0
+    keluaran = capsys.readouterr().out
+    assert "Ringkasan section sudah diperbarui" in keluaran
+    assert SESSKEY_UJI not in keluaran and PASSWORD_UJI not in keluaran
+
+
 # --- MCP -------------------------------------------------------------------
 
 
@@ -341,6 +354,20 @@ def test_mcp_section(server_mcp, situs, kredensial_di_setelan):
     ganti = server_mcp.ubah_nama_section(KURSUS_SECTION, 8001, "Session 01: Pengantar", kirim=True)
     assert ganti["ok"] is True
     assert situs.jumlah("POST", "/login/index.php") == 1
+
+
+def test_mcp_ubah_ringkasan_section(server_mcp, situs, kredensial_di_setelan):
+    isi = '<p><a href="https://drive.google.com/file/d/contoh/view">Slides (PDF)</a></p>'
+
+    rencana = server_mcp.ubah_ringkasan_section(KURSUS_WEB, 9000, isi, bentuk="html")
+    assert rencana["ok"] is True and rencana["kirim"] is False
+    assert 'target="_blank"' in rencana["ringkasan"]["isi_baru"]
+
+    hasil = server_mcp.ubah_ringkasan_section(KURSUS_WEB, 9000, isi, bentuk="html", kirim=True)
+    assert hasil["ok"] is True and hasil["hasil"]["sesuai"] is True
+
+    ulang = server_mcp.ubah_ringkasan_section(KURSUS_WEB, 9000, isi, bentuk="html")
+    assert ulang["ok"] is False and "sudah ada" in ulang["pesan"]
 
 
 def test_mcp_unduh_dan_tenggat(server_mcp, situs, kredensial_di_setelan, tmp_path):

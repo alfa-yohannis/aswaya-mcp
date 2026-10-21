@@ -20,6 +20,7 @@
     aswaya-section       section satu kursus
     aswaya-tambah-section      section baru di akhir kursus (uji coba; --kirim, lewat login web)
     aswaya-ubah-nama-section   ganti nama satu section (uji coba; --kirim, lewat login web)
+    aswaya-ubah-ringkasan-section   tambah teks atau tautan ke deskripsi section (uji coba; --kirim, lewat login web)
 
 Dari klona repositori, semuanya dipanggil lewat peluncur: `./aswaya kursus`,
 `./aswaya isi 5515`, dan seterusnya. Kredensial selalu dibaca dari setelan dan
@@ -124,10 +125,15 @@ def cetak_permintaan(permintaan: dict) -> None:
     if "langkah" in permintaan:
         print("\nLangkah lewat sesi web (sesskey dibaca dari halaman saat dikirim):")
         for nomor, langkah in enumerate(permintaan["langkah"], start=1):
-            parameter = "&".join(f"{kunci}={isi}" for kunci, isi in langkah["parameter"].items())
-            print(f"  {nomor}. {langkah['metode']} {langkah['url']}?{parameter}")
+            parameter = "&".join(f"{kunci}={isi}" for kunci, isi in (langkah.get("parameter") or {}).items())
+            print(f"  {nomor}. {langkah['metode']} {langkah['url']}{'?' + parameter if parameter else ''}")
             if "args" in langkah:
                 print(f"     {langkah['methodname']} {json.dumps(langkah['args'], ensure_ascii=False)}")
+            for nama, isi in (langkah.get("isian_diubah") or {}).items():
+                teks = " ".join(str(isi).split())
+                print(f"     {nama} = {teks if len(teks) <= 200 else teks[:197] + '...'}")
+            if langkah.get("isian_lain"):
+                print(f"     isian lain: {langkah['isian_lain']}")
         return
     print(f"\n{permintaan['metode']} {permintaan['url']}  (wsfunction={permintaan['wsfunction']}, wstoken disembunyikan)")
     lebar = max((len(nama) for nama in permintaan["isian"]), default=0)
@@ -525,6 +531,35 @@ def main_ubah_nama_section(argumen_baris: list[str] | None = None) -> int:
     return selesai_tulis(hasil, argumen.json)
 
 
+def main_ubah_ringkasan_section(argumen_baris: list[str] | None = None) -> int:
+    """Tambahkan isi ke ringkasan satu section, atau ganti seluruhnya; tanpa --kirim hanya uji coba."""
+    pengurai_ringkasan = pengurai(
+        "Tambahkan teks atau tautan ke ringkasan (deskripsi) satu section, mis. section General. "
+        "Tanpa --kirim hanya uji coba. Pengiriman lewat login web, jadi butuh ASWAYA_PASSWORD."
+    )
+    pengurai_ringkasan.add_argument("kursus_id", type=int, help="id kursus")
+    pengurai_ringkasan.add_argument("section_id", type=int, help="id section dari ./aswaya section (bukan nomornya)")
+    pengurai_ringkasan.add_argument("--isi", required=True, help="Isi baru; '-' dibaca dari stdin")
+    pengurai_ringkasan.add_argument("--html", action="store_true", help="Isi sudah berupa HTML")
+    letak = pengurai_ringkasan.add_mutually_exclusive_group()
+    letak.add_argument("--awal", action="store_true", help="Taruh isi di bagian paling atas ringkasan")
+    letak.add_argument("--ganti", action="store_true",
+                       help="Ganti seluruh ringkasan; tanpa --awal atau --ganti isi ditambahkan di akhir")
+    pengurai_ringkasan.add_argument("--tab-sama", action="store_true",
+                                    help="Biarkan tautan dibuka di tab yang sama; tanpa ini dibuka di tab baru")
+    pengurai_ringkasan.add_argument("--paksa", action="store_true",
+                                    help="Tetap tambahkan walau semua tautannya sudah ada")
+    pengurai_ringkasan.add_argument("--kirim", action="store_true", help="Benar-benar menyimpan; tanpa ini hanya uji coba")
+    argumen = pengurai_ringkasan.parse_args(argumen_baris)
+    hasil = section.ubah_ringkasan_section(
+        KlienAswaya(), argumen.kursus_id, argumen.section_id, baca_isian(argumen.isi),
+        cara="ganti" if argumen.ganti else "awal" if argumen.awal else "tambah",
+        bentuk="html" if argumen.html else "teks",
+        tab_baru=not argumen.tab_sama, kirim=argumen.kirim, paksa=argumen.paksa,
+    )
+    return selesai_tulis(hasil, argumen.json)
+
+
 # --- titik masuk ---------------------------------------------------------------
 
 
@@ -626,6 +661,11 @@ def jalankan_tambah_section() -> int:
 def jalankan_ubah_nama_section() -> int:
     """Titik masuk perintah `aswaya-ubah-nama-section`."""
     return jalankan_aman(main_ubah_nama_section)
+
+
+def jalankan_ubah_ringkasan_section() -> int:
+    """Titik masuk perintah `aswaya-ubah-ringkasan-section`."""
+    return jalankan_aman(main_ubah_ringkasan_section)
 
 
 if __name__ == "__main__":

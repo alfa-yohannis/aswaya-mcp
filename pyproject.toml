@@ -61,6 +61,7 @@ aswaya-pesan = "aswaya_mcp.cli:jalankan_pesan"
 aswaya-section = "aswaya_mcp.cli:jalankan_section"
 aswaya-tambah-section = "aswaya_mcp.cli:jalankan_tambah_section"
 aswaya-ubah-nama-section = "aswaya_mcp.cli:jalankan_ubah_nama_section"
+aswaya-ubah-ringkasan-section = "aswaya_mcp.cli:jalankan_ubah_ringkasan_section"
 aswaya-mcp = "aswaya_mcp.mcp_server:jalankan"
 
 [tool.setuptools.packages.find]

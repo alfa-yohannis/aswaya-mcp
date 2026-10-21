@@ -1,14 +1,16 @@
-"""Section kursus: daftar, tambah, dan ganti nama.
+"""Section kursus: daftar, tambah, ganti nama, dan ubah ringkasan.
 
-    daftar_section      core_course_get_contents lewat token web service
-    tambah_section      GET /course/changenumsections.php?courseid=..&insertsection=0
-                        &numsections=N&sesskey=.. lewat sesi web, lalu setiap section
-                        baru diberi nama lewat core_update_inplace_editable
-    ubah_nama_section   core_update_inplace_editable lewat sesi web
+    daftar_section          core_course_get_contents lewat token web service
+    tambah_section          GET /course/changenumsections.php?courseid=..&insertsection=0
+                            &numsections=N&sesskey=.. lewat sesi web, lalu setiap section
+                            baru diberi nama lewat core_update_inplace_editable
+    ubah_nama_section       core_update_inplace_editable lewat sesi web
+    ubah_ringkasan_section  GET /course/editsection.php?id=<section_id>, lalu POST form-nya
+                            dengan summary_editor[text] yang baru lewat sesi web
 
-Layanan moodle_mobile_app tidak memuat fungsi pembuat section, jadi dua alat
-terakhir memakai sesi web (sesi_web.py) seperti peramban dosen. Parameternya
-dicocokkan dengan kode Moodle 4.1 (MOODLE_401_STABLE):
+Layanan moodle_mobile_app tidak memuat fungsi pembuat atau pengubah section,
+jadi tiga alat terakhir memakai sesi web (sesi_web.py) seperti peramban dosen.
+Parameternya dicocokkan dengan kode Moodle 4.1 (MOODLE_401_STABLE):
 
     changenumsections.php   courseid wajib; insertsection=0 berarti section baru
                             ditaruh di akhir; numsections adalah banyaknya; butuh
@@ -20,6 +22,12 @@ dicocokkan dengan kode Moodle 4.1 (MOODLE_401_STABLE):
                             nomornya), value nama baru. format_topics hanya
                             menerima itemid milik kursus berformat topics, jadi
                             component harus cocok dengan format kursusnya.
+    editsection.php         form editsection_form (_qf__editsection_form=1) dengan
+                            id, course, sesskey, name, summary_editor[text|format|itemid],
+                            dan availabilityconditionsjson. Isiannya dibaca utuh dari
+                            form, hanya summary_editor[text] yang diganti, lalu dikirim
+                            dengan tombol submitbutton. Berhasil berarti dialihkan ke
+                            halaman kursus; form yang tampil lagi berarti ditolak.
 
 Keduanya bawaannya uji coba: rencananya menyebut section yang ada, nama baru,
 dan nomor posisinya. Sesudah dikirim, hasilnya diperiksa ulang lewat
@@ -30,13 +38,29 @@ kiriman, jadi nama tidak pernah dipasang ke section lama.
 from __future__ import annotations
 
 from collections import Counter
+from urllib.parse import urljoin, urlsplit
 
 from aswaya_mcp.aswaya_client import AswayaError, HasilTidakPasti, IsianDitolak, KlienAswaya, periksa_id
-from aswaya_mcp.sesi_web import PATH_AJAX, SesiWeb, format_dari_halaman
-from aswaya_mcp.teks import teks_dari_html
-from aswaya_mcp.tulis import PESAN_UJI_COBA, HasilTulis
+from aswaya_mcp.sesi_web import (
+    PATH_AJAX,
+    SesiWeb,
+    cari_form,
+    format_dari_halaman,
+    isian_form,
+    pesan_galat_form,
+    sup_dari,
+    tombol_form,
+)
+from aswaya_mcp.teks import teks_dari_html, teks_ke_html
+from aswaya_mcp.tulis import FORMAT_HTML_MOODLE, PESAN_UJI_COBA, HasilTulis
 
 PATH_CHANGENUMSECTIONS = "/course/changenumsections.php"
+PATH_EDITSECTION = "/course/editsection.php"
+ISIAN_RINGKASAN = "summary_editor[text]"
+ISIAN_FORMAT_RINGKASAN = "summary_editor[format]"
+PENANDA_FORM_SECTION = "_qf__editsection_form"
+TOMBOL_SIMPAN = "submitbutton"
+CARA_RINGKASAN = ("tambah", "awal", "ganti")
 FUNGSI_INPLACE = "core_update_inplace_editable"
 ITEMTYPE_NAMA_SECTION = "sectionname"
 MAKS_NAMA = 255
@@ -389,6 +413,199 @@ def ubah_nama_section(
             "nama_sekarang": nama_sekarang,
             "sesuai": sesuai,
             "tampil": teks_dari_html((jawaban or {}).get("displayvalue")) if isinstance(jawaban, dict) else None,
+        },
+        berhasil=sesuai, peringatan=peringatan, pesan=pesan,
+    )
+
+
+# --- ringkasan section ---------------------------------------------------------
+
+
+def baca_ringkasan(klien: KlienAswaya, kursus_id: int) -> dict[int, dict]:
+    """Section kursus berkunci id, dengan ringkasan HTML (summary) dan formatnya, tanpa modul."""
+    parameter = {"courseid": kursus_id, "options": [{"name": "excludemodules", "value": True}]}
+    hasil = {}
+    for section in klien.panggil("core_course_get_contents", parameter) or []:
+        hasil[section.get("id")] = {
+            "id": section.get("id"),
+            "nomor": section.get("section"),
+            "nama": teks_dari_html(section.get("name")),
+            "ringkasan": section.get("summary") or "",
+            "format_ringkasan": section.get("summaryformat"),
+        }
+    return hasil
+
+
+def buka_di_tab_baru(isi_html: str) -> str:
+    """Setiap tautan <a href> di isi_html dibuka di tab baru: target="_blank" dan rel="noopener"."""
+    sup = sup_dari(isi_html)
+    for tautan in sup.find_all("a", href=True):
+        tautan["target"] = "_blank"
+        rel = list(tautan.get("rel") or [])
+        if "noopener" not in rel:
+            rel.append("noopener")
+        tautan["rel"] = rel
+    return str(sup)
+
+
+def tautan_di(isi_html: str) -> list[str]:
+    """Alamat semua tautan <a href> di isi_html, berurutan."""
+    return [tautan["href"] for tautan in sup_dari(isi_html).find_all("a", href=True)]
+
+
+def gabung_ringkasan(lama: str, tambahan: str, *, di_awal: bool = False) -> str:
+    """Ringkasan lama dengan tambahan di akhir (atau di awal), dipisah satu baris baru seperti editor Moodle."""
+    lama = (lama or "").strip()
+    if not lama:
+        return tambahan
+    return f"{tambahan}\r\n{lama}" if di_awal else f"{lama}\r\n{tambahan}"
+
+
+def kunci_html(isi: str | None) -> str:
+    """Bentuk pembanding HTML: akhir baris dan spasi di ujung disamakan."""
+    return (isi or "").replace("\r\n", "\n").strip()
+
+
+def ubah_ringkasan_section(
+    klien: KlienAswaya,
+    kursus_id: int,
+    section_id: int,
+    isi: str,
+    *,
+    cara: str = "tambah",
+    bentuk: str = "teks",
+    tab_baru: bool = True,
+    kirim: bool = False,
+    paksa: bool = False,
+    sesi: SesiWeb | None = None,
+) -> HasilTulis:
+    """Tambahkan isi ke ringkasan (deskripsi) satu section, atau ganti seluruhnya. Bawaannya uji coba.
+
+    `isi` berupa teks biasa (baris kosong memisahkan paragraf, alamat http(s)
+    menjadi tautan) atau HTML dengan bentuk="html". cara="tambah" menaruhnya di
+    akhir ringkasan yang ada, cara="awal" di bagian paling atasnya, dan
+    cara="ganti" menggantikan seluruh ringkasan. Dengan tab_baru=True setiap
+    tautan di isi baru dibuka di tab baru. Kalau semua tautan di isi baru sudah
+    ada di ringkasan, cara="tambah" dan cara="awal" ditolak kecuali
+    paksa=True, supaya perintah yang terulang tidak menggandakan tautan. Dengan
+    kirim=True dibutuhkan ASWAYA_PASSWORD untuk login web.
+    """
+    kursus_id = periksa_id(kursus_id, "kursus_id")
+    section_id = periksa_id(section_id, "section_id")
+    if cara not in CARA_RINGKASAN:
+        raise IsianDitolak(f"cara harus 'tambah', 'awal', atau 'ganti', bukan {cara!r}")
+    if bentuk not in ("teks", "html"):
+        raise IsianDitolak(f"bentuk harus 'teks' atau 'html', bukan {bentuk!r}")
+    if not isinstance(isi, str) or not isi.strip():
+        raise IsianDitolak("Isi ringkasan tidak boleh kosong")
+    isi_html = teks_ke_html(isi) if bentuk == "teks" else isi.strip()
+    if tab_baru:
+        isi_html = buka_di_tab_baru(isi_html)
+
+    sekarang = baca_ringkasan(klien, kursus_id)
+    sasaran = sekarang.get(section_id)
+    if sasaran is None:
+        raise IsianDitolak(
+            f"section_id {section_id} bukan section kursus {kursus_id}; lihat daftar_section untuk id yang benar"
+        )
+    lama = sasaran["ringkasan"]
+    tautan_baru = tautan_di(isi_html)
+    sudah_ada = [alamat for alamat in tautan_baru if alamat in lama]
+    peringatan = []
+    if cara != "ganti" and tautan_baru and len(sudah_ada) == len(tautan_baru) and not paksa:
+        raise IsianDitolak(
+            "Semua tautan di isi baru sudah ada di ringkasan section ini: " + ", ".join(sudah_ada)
+            + ". Tidak ada yang dikirim. Ulangi dengan paksa=True (CLI: --paksa) kalau memang ingin menambahkannya lagi."
+        )
+    if sudah_ada:
+        peringatan.append("Sebagian tautan sudah ada di ringkasan: " + ", ".join(sudah_ada))
+    if sasaran["format_ringkasan"] not in (None, FORMAT_HTML_MOODLE):
+        peringatan.append(
+            f"Ringkasan lama berformat {sasaran['format_ringkasan']}, bukan HTML; editor Aswaya menyimpannya sebagai HTML"
+        )
+    baru = gabung_ringkasan(lama, isi_html, di_awal=cara == "awal") if cara != "ganti" else isi_html
+    keterangan = keterangan_kursus(klien, kursus_id)
+    ringkasan = {
+        "kursus_id": kursus_id,
+        "kursus": keterangan.get("nama"),
+        "section_id": section_id,
+        "nomor": sasaran["nomor"],
+        "nama": sasaran["nama"],
+        "cara": cara,
+        "isi_baru": isi_html,
+        "tautan_baru": tautan_baru,
+        "ringkasan_lama": lama,
+        "ringkasan_baru": baru,
+    }
+    permintaan = {
+        "langkah": [
+            {"metode": "GET", "url": klien.base_url + PATH_EDITSECTION, "parameter": {"id": section_id, "sr": 0}},
+            {
+                "metode": "POST",
+                "url": klien.base_url + PATH_EDITSECTION,
+                "isian_diubah": {ISIAN_RINGKASAN: baru, ISIAN_FORMAT_RINGKASAN: FORMAT_HTML_MOODLE},
+                "isian_lain": "dibaca apa adanya dari form editsection (id, course, sesskey, name, "
+                "summary_editor[itemid], availabilityconditionsjson), lalu dikirim dengan tombol submitbutton",
+            },
+        ],
+    }
+    fungsi = PATH_EDITSECTION.lstrip("/")
+    if not kirim:
+        if not klien.kredensial()[1]:
+            peringatan.append("kirim=True butuh ASWAYA_PASSWORD untuk login web; token web service saja tidak cukup")
+        return HasilTulis(
+            kirim=False, terkirim=False, fungsi=fungsi, ringkasan=ringkasan, permintaan=permintaan,
+            peringatan=peringatan, pesan=PESAN_UJI_COBA,
+        )
+
+    sesi = sesi or SesiWeb(klien)
+    halaman = sesi.halaman(PATH_EDITSECTION, params={"id": section_id, "sr": 0})
+    form = cari_form(halaman.text, PATH_EDITSECTION)
+    if form is None:
+        raise AswayaError(f"Form edit section {section_id} tidak ditemukan; tidak ada yang dikirim")
+    isian = isian_form(form)
+    nilai = dict(isian)
+    if nilai.get(PENANDA_FORM_SECTION) != "1" or nilai.get("course") != str(kursus_id) or ISIAN_RINGKASAN not in nilai:
+        raise AswayaError(
+            f"Form di {PATH_EDITSECTION} bukan form edit section {section_id} kursus {kursus_id}; tidak ada yang dikirim"
+        )
+    if cara != "ganti" and kunci_html(nilai[ISIAN_RINGKASAN]) != kunci_html(lama):
+        # ringkasan berubah sejak dibaca; tambahan ditempel ke isi form yang paling baru
+        peringatan.append("Ringkasan berubah sejak uji coba; tambahan ditempel ke ringkasan terbaru")
+        baru = gabung_ringkasan(nilai[ISIAN_RINGKASAN], isi_html, di_awal=cara == "awal")
+    ganti = {ISIAN_RINGKASAN: baru, ISIAN_FORMAT_RINGKASAN: str(FORMAT_HTML_MOODLE)}
+    isian = [(kunci, ganti.get(kunci, isi_lama)) for kunci, isi_lama in isian]
+    tombol = tombol_form(form, TOMBOL_SIMPAN)
+    if tombol is not None:
+        isian.append(tombol)
+    jawaban = sesi.kirim_form(urljoin(halaman.url, form.get("action") or PATH_EDITSECTION), isian, referer=halaman.url)
+    if urlsplit(jawaban.url).path.endswith(PATH_EDITSECTION):
+        galat = pesan_galat_form(jawaban.text)
+        raise IsianDitolak(
+            f"Aswaya menampilkan lagi form edit section{f' dengan pesan: {galat}' if galat else ''}; ringkasan tidak berubah."
+        )
+
+    try:
+        akhir = baca_ringkasan(klien, kursus_id).get(section_id)
+    except AswayaError:
+        akhir = None
+    ringkasan_sekarang = (akhir or {}).get("ringkasan")
+    sesuai = akhir is not None and kunci_html(ringkasan_sekarang) == kunci_html(baru)
+    if akhir is None:
+        pesan = "Form tersimpan, tetapi ringkasan tidak bisa dibaca ulang; periksa di Aswaya sebelum mencoba lagi."
+    elif sesuai:
+        pesan = "Ringkasan section sudah diperbarui; sudah diperiksa ulang lewat core_course_get_contents."
+    else:
+        pesan = "Form tersimpan, tetapi ringkasan yang terbaca berbeda dari yang dikirim; periksa di Aswaya."
+    return HasilTulis(
+        kirim=True, terkirim=True, fungsi=fungsi, ringkasan={**ringkasan, "ringkasan_baru": baru},
+        permintaan=permintaan,
+        hasil={
+            "section_id": section_id,
+            "ringkasan_sekarang": ringkasan_sekarang,
+            "sesuai": sesuai,
+            "tautan_ada": [alamat for alamat in tautan_baru if alamat in (ringkasan_sekarang or "")],
+            "url_kursus": klien.url_kursus(kursus_id),
         },
         berhasil=sesuai, peringatan=peringatan, pesan=pesan,
     )

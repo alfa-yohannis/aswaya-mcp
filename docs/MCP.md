@@ -32,8 +32,8 @@ ASWAYA_TOKEN=
 ```
 
 Cukup password atau token; kalau keduanya ada, token dipakai lebih dulu.
-`tambah_section` dan `ubah_nama_section` login lewat halaman web, jadi keduanya
-butuh password. Tool MCP tidak menerima username, password, maupun token lewat
+`tambah_section`, `ubah_nama_section`, dan `ubah_ringkasan_section` login lewat
+halaman web, jadi ketiganya butuh password. Tool MCP tidak menerima username, password, maupun token lewat
 parameter, jadi asisten tidak pernah memegangnya. Token hasil login disimpan di
 `~/.cache/aswaya-mcp/` (izin 0600); lihat README bagian Kredensial.
 
@@ -112,8 +112,8 @@ Tool yang hanya membaca aman diizinkan otomatis: `cek_login`, `daftar_kursus`,
 `nilai_kursus`, `daftar_forum`, `diskusi_forum`, `tenggat`, `daftar_section`,
 dan `fungsi_tersedia`. `unduh_berkas` menulis ke disk lokal; izinkan kalau Anda
 nyaman asisten menyimpan berkas di sana. Biarkan `kirim_pengumuman`,
-`beri_nilai`, `kirim_pesan`, `tambah_section`, `ubah_nama_section`, dan
-`panggil_fungsi` tetap meminta persetujuan setiap kali dipanggil. Di Claude Code
+`beri_nilai`, `kirim_pesan`, `tambah_section`, `ubah_nama_section`,
+`ubah_ringkasan_section`, dan `panggil_fungsi` tetap meminta persetujuan setiap kali dipanggil. Di Claude Code
 nama izinnya berbentuk `mcp__aswaya-mcp__daftar_kursus`.
 
 ## Tool
@@ -139,6 +139,7 @@ nama izinnya berbentuk `mcp__aswaya-mcp__daftar_kursus`.
 | `kirim_pesan`       | `user_ids`, `teks`, `kirim?`, `bentuk?`                     | pratinjau penerima, atau status per penerima    |
 | `tambah_section`    | `kursus_id`, `nama` (daftar), `kirim?`, `paksa?`            | rencana posisi, atau hasil yang sudah diperiksa |
 | `ubah_nama_section` | `kursus_id`, `section_id`, `nama`, `kirim?`                 | nama lama dan baru, atau hasil yang diperiksa   |
+| `ubah_ringkasan_section` | `kursus_id`, `section_id`, `isi`, `cara?`, `bentuk?`, `tab_baru?`, `kirim?`, `paksa?` | ringkasan lama dan baru, atau hasil yang diperiksa |
 
 Setiap tool membalas `ok`. Kalau `ok` bernilai `false`, `pesan` menjelaskan
 sebabnya: kredensial belum diisi, login ditolak, fungsi tidak tersedia untuk
@@ -379,7 +380,8 @@ dengan `jenis: "tulis"`, berbentuk sama dengan alat tulis lainnya.
 ## Alat yang menulis
 
 `kirim_pengumuman`, `beri_nilai`, `kirim_pesan`, `tambah_section`,
-`ubah_nama_section`, dan `panggil_fungsi` untuk fungsi selain baca. Semuanya
+`ubah_nama_section`, `ubah_ringkasan_section`, dan `panggil_fungsi` untuk fungsi
+selain baca. Semuanya
 bawaannya `kirim=false`, dan balasannya berbentuk sama:
 
 | Field        | Isi                                                                     |
@@ -511,6 +513,25 @@ Satu `core_update_inplace_editable` lewat sesi web. `section_id` adalah id dari
 
 Sesudah kiriman, `hasil` berisi `nama_sekarang`, `sesuai`, dan `tampil` (nama
 yang dikembalikan Moodle).
+
+### `ubah_ringkasan_section`
+
+Form `course/editsection.php` lewat sesi web: isian form dibaca utuh, hanya
+`summary_editor[text]` yang diganti. Cocok untuk menaruh teks atau tautan di
+section General (nomor 0). `cara` bernilai `tambah` (di akhir, bawaan), `awal`
+(di bagian paling atas), atau `ganti` (seluruh ringkasan). `isi` berupa teks
+biasa atau HTML dengan `bentuk="html"`; `tab_baru=true` (bawaan) membuat setiap
+tautan di isi baru dibuka di tab baru. Kalau semua tautannya sudah ada,
+`tambah` dan `awal` ditolak kecuali `paksa=true`.
+
+```json
+{ "ringkasan": { "kursus_id": 5519, "section_id": 62626, "nomor": 0, "nama": "General", "cara": "awal",
+                 "tautan_baru": ["https://drive.google.com/file/d/.../view?usp=sharing"],
+                 "ringkasan_lama": "<h3>Kuesioner Penelitian:</h3>...", "ringkasan_baru": "<h3>Materi:</h3>..." } }
+```
+
+Sesudah kiriman, `hasil` berisi `ringkasan_sekarang`, `sesuai`, `tautan_ada`,
+dan `url_kursus`.
 
 ## Catatan untuk agen
 

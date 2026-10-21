@@ -136,6 +136,19 @@ class PermintaanNamaSection(Kredensial):
     kirim: bool = Field(default=False, description="false: kembalikan rencana; true: ganti lewat login web")
 
 
+class PermintaanRingkasanSection(Kredensial):
+    """Isi baru untuk ringkasan (deskripsi) satu section."""
+
+    isi: str = Field(description="Isi baru: teks biasa atau HTML")
+    cara: Literal["tambah", "awal", "ganti"] = Field(
+        default="tambah", description="tambah di akhir ringkasan, awal di bagian paling atas, atau ganti seluruhnya"
+    )
+    bentuk: Literal["teks", "html"] = Field(default="teks", description="teks (diubah ke HTML) atau html")
+    tab_baru: bool = Field(default=True, description="true: setiap tautan di isi baru dibuka di tab baru")
+    paksa: bool = Field(default=False, description="true: tetap tambahkan walau semua tautannya sudah ada")
+    kirim: bool = Field(default=False, description="false: kembalikan rencana; true: simpan lewat login web")
+
+
 class PermintaanPesan(Kredensial):
     """Pesan pribadi yang sama ke satu atau beberapa pengguna. Bawaannya uji coba."""
 
@@ -439,6 +452,26 @@ def ubah_nama_section(kursus_id: int, section_id: int, permintaan: PermintaanNam
         section_id,
         permintaan.nama,
         kirim=permintaan.kirim,
+        sesi=ambil_sesi_web(permintaan, klien),
+    )
+
+
+@router.post("/kursus/{kursus_id}/section/{section_id}/ringkasan",
+             summary="Tambah teks atau tautan ke ringkasan section (bawaannya uji coba)")
+def ubah_ringkasan_section(kursus_id: int, section_id: int, permintaan: PermintaanRingkasanSection) -> dict:
+    """Tanpa kirim=true hanya rencana; pengirimannya lewat login web, jadi butuh password."""
+    klien = ambil_klien(permintaan)
+    return hasil_tulis(
+        section.ubah_ringkasan_section,
+        klien,
+        kursus_id,
+        section_id,
+        permintaan.isi,
+        cara=permintaan.cara,
+        bentuk=permintaan.bentuk,
+        tab_baru=permintaan.tab_baru,
+        kirim=permintaan.kirim,
+        paksa=permintaan.paksa,
         sesi=ambil_sesi_web(permintaan, klien),
     )
 

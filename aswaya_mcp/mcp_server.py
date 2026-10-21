@@ -66,10 +66,12 @@ server = MCPServer(
         "Untuk fungsi Moodle yang tidak punya tool sendiri, cari namanya dengan fungsi_tersedia lalu "
         "pakai panggil_fungsi. "
         "Tool yang menulis ke Aswaya adalah kirim_pengumuman, beri_nilai, kirim_pesan, tambah_section, "
-        "ubah_nama_section, dan panggil_fungsi untuk fungsi selain baca. Bawaannya uji coba "
+        "ubah_nama_section, ubah_ringkasan_section, dan panggil_fungsi untuk fungsi selain baca. Bawaannya uji coba "
         "(kirim=False) yang hanya mengembalikan pratinjau. Jalankan uji coba lebih dulu, tunjukkan "
         "pratinjaunya (ringkasan dan permintaan) ke pemakai, lalu panggil lagi dengan kirim=True hanya "
-        "setelah pemakai menyetujuinya. tambah_section dan ubah_nama_section mengirim lewat login web "
+        "setelah pemakai menyetujuinya. ubah_ringkasan_section menambah teks atau tautan ke deskripsi "
+        "section, mis. section General (nomor 0). tambah_section, ubah_nama_section, dan "
+        "ubah_ringkasan_section mengirim lewat login web "
         "dengan password dari .env; kalau login itu terhalang captcha atau MFA, sampaikan apa adanya "
         "dan jangan mencari jalan lain. Kalau balasannya terkirim=true dengan ok=false, jangan "
         "mengirim ulang; periksa dulu lewat tool baca dan laporkan ke pemakai. Email dan idnumber (NIM) mahasiswa "
@@ -416,6 +418,41 @@ def ubah_nama_section(kursus_id: int, section_id: int, nama: str, kirim: bool = 
     try:
         hasil = section.ubah_nama_section(
             klien_bersama(), kursus_id, section_id, nama, kirim=kirim, sesi=sesi_web_bersama()
+        )
+    except GALAT as galat:
+        return gagal_tulis(galat)
+    return {"ok": hasil.berhasil, **hasil.sebagai_dict()}
+
+
+@server.tool()
+def ubah_ringkasan_section(
+    kursus_id: int,
+    section_id: int,
+    isi: str,
+    cara: Literal["tambah", "awal", "ganti"] = "tambah",
+    bentuk: Literal["teks", "html"] = "teks",
+    tab_baru: bool = True,
+    kirim: bool = False,
+    paksa: bool = False,
+) -> dict:
+    """Tambahkan teks atau tautan ke ringkasan (deskripsi) satu section, atau ganti seluruhnya. Bawaannya uji coba.
+
+    `section_id` adalah id dari daftar_section; section General adalah yang
+    bernomor 0. `isi` berupa teks biasa (baris kosong memisahkan paragraf,
+    alamat http(s) menjadi tautan) atau HTML dengan bentuk="html", mis.
+    <p><a href="...">Slides (PDF)</a></p>. cara="tambah" menaruhnya di akhir
+    ringkasan, cara="awal" di bagian paling atasnya, dan cara="ganti"
+    menggantikan seluruh ringkasan. tab_baru=True
+    membuat setiap tautan di isi baru dibuka di tab baru. Rencananya memuat
+    ringkasan lama dan baru; tunjukkan ke pemakai dan kirim dengan kirim=True
+    hanya setelah disetujui. Pengirimannya lewat login web dengan password dari
+    .env (course/editsection.php), dan hasilnya diperiksa ulang. Kalau semua
+    tautannya sudah ada, cara="tambah" dan "awal" ditolak kecuali paksa=True.
+    """
+    try:
+        hasil = section.ubah_ringkasan_section(
+            klien_bersama(), kursus_id, section_id, isi, cara=cara, bentuk=bentuk, tab_baru=tab_baru,
+            kirim=kirim, paksa=paksa, sesi=sesi_web_bersama(),
         )
     except GALAT as galat:
         return gagal_tulis(galat)

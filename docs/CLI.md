@@ -54,6 +54,7 @@ Dijalankan dari akar proyek, yaitu direktori berisi `aswaya`.
 ./aswaya pesan ...              # pesan pribadi (uji coba tanpa --kirim)
 ./aswaya tambah-section ...     # section baru (uji coba tanpa --kirim)
 ./aswaya ubah-nama-section ...  # ganti nama section (uji coba tanpa --kirim)
+./aswaya ubah-ringkasan-section ...  # teks atau tautan di deskripsi section (uji coba tanpa --kirim)
 ./aswaya api                    # REST API
 ./aswaya mcp                    # MCP server
 ./aswaya uji                    # unit test
@@ -308,6 +309,23 @@ Sesudah `--kirim`, setiap section baru diperiksa ulang lewat
 
 `section_id` adalah id dari `./aswaya section`, bukan nomor urutnya. Butuh
 `ASWAYA_PASSWORD` untuk `--kirim`.
+
+### `./aswaya ubah-ringkasan-section <kursus_id> <section_id>`
+
+```bash
+./aswaya ubah-ringkasan-section 5519 62626 --awal --html --isi '<h3>Materi:</h3><p><a href="https://drive.google.com/...">Slides (PDF)</a></p>'
+./aswaya ubah-ringkasan-section 5519 62626 --isi 'Slides: https://drive.google.com/...' --kirim
+```
+
+| Argumen       | Keterangan                                                              |
+|---------------|-------------------------------------------------------------------------|
+| `--isi`       | isi baru; `-` dibaca dari stdin                                         |
+| `--html`      | isi sudah berupa HTML; tanpa ini teks biasa diubah ke HTML              |
+| `--awal`      | taruh di bagian paling atas ringkasan (bawaannya di akhir)              |
+| `--ganti`     | ganti seluruh ringkasan                                                 |
+| `--tab-sama`  | biarkan tautan dibuka di tab yang sama (bawaannya tab baru)             |
+| `--paksa`     | tetap tambahkan walau semua tautannya sudah ada                         |
+| `--kirim`     | benar-benar menyimpan lewat login web; butuh `ASWAYA_PASSWORD`          |
 
 ### `./aswaya panggil <fungsi>`
 

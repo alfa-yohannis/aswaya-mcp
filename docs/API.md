@@ -62,8 +62,9 @@ yang dipakai sidik SHA-256-nya. Token dan cookie milik kredensial per permintaan
 tidak pernah ditulis ke cache disk server; hanya kredensial setelan server yang
 memakai `~/.cache/aswaya-mcp/`.
 
-Endpoint section (`POST /kursus/{id}/section` dan
-`POST /kursus/{id}/section/{section_id}/nama`) login lewat halaman web, jadi
+Endpoint section (`POST /kursus/{id}/section`,
+`POST /kursus/{id}/section/{section_id}/nama`, dan
+`POST /kursus/{id}/section/{section_id}/ringkasan`) login lewat halaman web, jadi
 butuh password. Dengan token saja, uji cobanya tetap jalan tetapi kiriman
 sungguhannya dibalas `400`.
 
@@ -162,6 +163,16 @@ sudah terpakai di kursus itu dibalas `422` kecuali `"paksa": true`.
 ```json
 { "nama": "Session 03: Pewarisan", "kirim": false }
 ```
+
+### `POST /kursus/{kursus_id}/section/{section_id}/ringkasan`
+
+```json
+{ "isi": "<p><a href=\"https://drive.google.com/...\">Slides (PDF)</a></p>", "bentuk": "html",
+  "cara": "awal", "tab_baru": true, "paksa": false, "kirim": false }
+```
+
+`cara` bernilai `tambah` (di akhir, bawaan), `awal` (paling atas), atau `ganti`.
+Tautan yang semuanya sudah ada dibalas `422` kecuali `"paksa": true`.
 
 ### `POST /panggil`
 

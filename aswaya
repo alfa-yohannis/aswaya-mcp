@@ -22,6 +22,7 @@
 #   ./aswaya pesan --ke <user_id> --teks ...                    # uji coba; --kirim untuk mengirim
 #   ./aswaya tambah-section <kursus_id> --nama "Session "{08..14}  # uji coba; --kirim (login web)
 #   ./aswaya ubah-nama-section <kursus_id> <section_id> --nama ... # uji coba; --kirim (login web)
+#   ./aswaya ubah-ringkasan-section <kursus_id> <section_id> --isi ... [--html] # uji coba; --kirim (login web)
 #   ./aswaya api            # REST API di http://localhost:8000 (PORT=9001 untuk ganti port)
 #   ./aswaya mcp            # MCP server lewat stdio
 #   ./aswaya uji            # unit test
@@ -58,7 +59,7 @@ if [[ ! -f "$PENANDA" || "$AKAR/pyproject.toml" -nt "$PENANDA" ]]; then
 fi
 
 bantuan() {
-	sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+	sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
 	exit 2
 }
 
@@ -87,6 +88,7 @@ pesan) exec "$VENV/bin/aswaya-pesan" "$@" ;;
 section) exec "$VENV/bin/aswaya-section" "$@" ;;
 tambah-section) exec "$VENV/bin/aswaya-tambah-section" "$@" ;;
 ubah-nama-section) exec "$VENV/bin/aswaya-ubah-nama-section" "$@" ;;
+ubah-ringkasan-section) exec "$VENV/bin/aswaya-ubah-ringkasan-section" "$@" ;;
 api) exec "$VENV/bin/uvicorn" aswaya_mcp.api:app --port "${PORT:-8000}" "$@" ;;
 mcp) exec "$PYTHON" -m aswaya_mcp.mcp_server "$@" ;;
 uji) exec "$PYTHON" -m pytest "$AKAR/tests" "$@" ;;

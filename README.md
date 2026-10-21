@@ -132,9 +132,10 @@ di kelas Pengembangan Aplikasi Web?"* Ada 19 tool. Tiga belas hanya membaca:
 `cek_login`, `daftar_kursus`, `isi_kursus`, `peserta_kursus`, `daftar_tugas`,
 `pengumpulan_tugas`, `nilai_kursus`, `daftar_forum`, `diskusi_forum`, `tenggat`,
 `daftar_section`, `fungsi_tersedia`, dan `unduh_berkas` (yang menulis ke disk
-lokal, tidak ke Aswaya). Enam bisa menulis ke Aswaya dan bawaannya uji coba:
+lokal, tidak ke Aswaya). Tujuh bisa menulis ke Aswaya dan bawaannya uji coba:
 `kirim_pengumuman`, `beri_nilai`, `kirim_pesan`, `tambah_section`,
-`ubah_nama_section`, dan `panggil_fungsi` untuk fungsi selain baca. Rinciannya
+`ubah_nama_section`, `ubah_ringkasan_section`, dan `panggil_fungsi` untuk fungsi
+selain baca. Rinciannya
 di [docs/MCP.md](docs/MCP.md).
 
 ### 2. REST API
@@ -236,6 +237,7 @@ permintaannya dikirim tepat sekali.
 | `kirim_pesan`       | `core_message_send_instant_messages`                     | setiap id penerima dikenal Aswaya                            |
 | `tambah_section`    | `course/changenumsections.php`, lalu nama lewat AJAX     | nama belum terpakai di kursus itu (kecuali `paksa`)          |
 | `ubah_nama_section` | `core_update_inplace_editable` lewat AJAX                | section milik kursus itu                                     |
+| `ubah_ringkasan_section` | form `course/editsection.php` lewat sesi web        | section milik kursus itu; tautannya belum semua ada (kecuali `paksa`) |
 | `panggil_fungsi`    | wsfunction apa pun selain fungsi baca                    | fungsinya dimuat layanan token ini                           |
 
 Isi pengumuman, umpan balik, dan pesan berupa teks biasa: karakter HTML
@@ -297,6 +299,33 @@ sejenisnya), login dihentikan dengan pesan jelas dan captcha-nya tidak dicoba
 dijawab. Begitu juga kalau Aswaya meminta MFA, persetujuan kebijakan situs, atau
 penggantian password. Langkah seperti itu diselesaikan pemakai lewat peramban.
 Login web yang gagal tidak diulang otomatis.
+
+### Ringkasan section
+
+`ubah_ringkasan_section` mengisi deskripsi sebuah section, misalnya section
+General (nomor 0) di bagian atas kursus, juga lewat sesi web:
+
+1. `GET /course/editsection.php?id=<section_id>&sr=0` membuka form edit section.
+2. Isian form dibaca utuh seperti peramban mengirimnya (id, course, sesskey,
+   name, `summary_editor[itemid]`, `availabilityconditionsjson`). Hanya
+   `summary_editor[text]` yang diganti, lalu form dikirim dengan tombol
+   `submitbutton`.
+3. Kalau Aswaya mengalihkan ke halaman kursus, ringkasannya diperiksa ulang
+   lewat `core_course_get_contents`. Kalau form tampil lagi, pesan galatnya
+   dilaporkan dan tidak ada yang berubah.
+
+Bawaannya isi baru ditambahkan di akhir ringkasan (`--awal` untuk menaruhnya
+di bagian paling atas, `--ganti` untuk mengganti seluruhnya), dan setiap tautan di isi baru dibuka di tab baru
+(`target="_blank" rel="noopener"`; `--tab-sama` untuk mematikannya). Isi berupa
+teks biasa, atau HTML dengan `--html`. Kalau semua tautannya sudah ada di
+ringkasan, penambahan ditolak supaya perintah yang terulang tidak menggandakan
+tautan; `--paksa` melewati pemeriksaan ini.
+
+```bash
+./aswaya section 5519                                                     # cari id section General
+./aswaya ubah-ringkasan-section 5519 62626 --html --isi '<p><a href="https://drive.google.com/...">Slides (PDF)</a></p>'           # rencana
+./aswaya ubah-ringkasan-section 5519 62626 --html --isi '<p><a href="https://drive.google.com/...">Slides (PDF)</a></p>' --kirim   # kirim
+```
 
 ## Privasi data mahasiswa
 

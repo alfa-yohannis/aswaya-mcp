@@ -11,6 +11,10 @@ seperti itu paket ini juga bisa masuk lewat halaman login, seperti peramban:
                                      [{"index": 0, "methodname": ..., "args": {...}}]
                                      -> [{"error": false, "data": ...}] atau
                                         [{"error": true, "exception": {"errorcode", "message"}}]
+    POST form halaman, mis. /course/editsection.php
+                                     isian dibaca utuh dari form-nya (isian_form),
+                                     termasuk sesskey; berhasil -> dialihkan keluar
+                                     dari halaman form, gagal validasi -> form tampil lagi
 
 Menurut pemeriksaan pemakai pada Oktober 2026, halaman login Aswaya tidak memuat
 captcha dan isiannya username, password, dan logintoken. Kalau suatu saat ada
@@ -175,6 +179,66 @@ def format_dari_halaman(html: str) -> str:
     return ""
 
 
+def cari_form(html: str, path_action: str):
+    """Form pertama yang action-nya berakhir dengan `path_action` (mis. "/course/editsection.php"); None kalau tidak ada."""
+    akhiran = path_action.lstrip("/")
+    for form in sup_dari(html).find_all("form"):
+        if urlsplit(form.get("action") or "").path.endswith(akhiran):
+            return form
+    return None
+
+
+def isian_form(form) -> list[tuple[str, str]]:
+    """Isian form persis seperti peramban mengirimnya, tanpa tombol.
+
+    Isian berurutan sesuai halaman: input teks dan tersembunyi apa adanya,
+    checkbox dan radio hanya yang tercentang, select satu pilihan dengan opsi
+    terpilih (atau opsi pertama), select ganda dengan semua opsi terpilihnya,
+    dan textarea dengan isinya. Isian yang disabled dan tombol tidak ikut.
+    """
+    isian = []
+    for elemen in form.find_all(["input", "select", "textarea"]):
+        nama = elemen.get("name")
+        if not nama or elemen.has_attr("disabled"):
+            continue
+        if elemen.name == "textarea":
+            isian.append((nama, elemen.get_text()))
+        elif elemen.name == "select":
+            opsi = elemen.find_all("option")
+            terpilih = [satu for satu in opsi if satu.has_attr("selected")]
+            if elemen.has_attr("multiple"):
+                isian.extend((nama, satu.get("value", satu.get_text())) for satu in terpilih)
+            elif terpilih or opsi:
+                satu = (terpilih or opsi)[0]
+                isian.append((nama, satu.get("value", satu.get_text())))
+        else:
+            jenis = (elemen.get("type") or "text").lower()
+            if jenis in JENIS_TANPA_NILAI:
+                continue
+            if jenis in ("checkbox", "radio") and not elemen.has_attr("checked"):
+                continue
+            isian.append((nama, elemen.get("value", "")))
+    return isian
+
+
+def tombol_form(form, nama: str) -> tuple[str, str] | None:
+    """Pasangan (nama, label) tombol submit bernama `nama` di form; None kalau tidak ada."""
+    tombol = form.find(["input", "button"], attrs={"name": nama, "type": "submit"})
+    if tombol is None:
+        return None
+    return nama, tombol.get("value", tombol.get_text(" ", strip=True))
+
+
+def pesan_galat_form(html: str) -> str:
+    """Pesan galat validasi form Moodle (.invalid-feedback, .error, .alert-danger), digabung jadi satu baris."""
+    hasil = []
+    for elemen in sup_dari(html).select(".invalid-feedback, span.error, .alert-danger"):
+        teks = " ".join(elemen.get_text(" ").split())[:200]
+        if teks and teks not in hasil:
+            hasil.append(teks)
+    return "; ".join(hasil)
+
+
 def pesan_galat_login(html: str) -> str:
     """Pesan galat di halaman login (.alert-danger, #loginerrormessage), digabung jadi satu baris."""
     sup = sup_dari(html)
@@ -247,7 +311,7 @@ class SesiWeb:
         path_atau_url: str,
         *,
         params: dict | None = None,
-        data: dict | None = None,
+        data: dict | list[tuple[str, str]] | None = None,
         json_badan: Any = None,
         headers: dict | None = None,
     ):
@@ -408,6 +472,30 @@ class SesiWeb:
                 self.login()
             if self.belum_masuk(jawaban):
                 raise LoginDitolak("Sesi web Aswaya habis dan login ulang tidak memulihkannya; aksi tidak dijalankan")
+            self.tandai_masuk(jawaban)
+            return jawaban
+
+    def kirim_form(self, alamat: str, isian: list[tuple[str, str]], *, referer: str = ""):
+        """POST satu form yang mengubah data, mis. course/editsection.php, lalu kembalikan halaman akhirnya.
+
+        sesskey ikut di isian, diambil dari halaman form itu sendiri, jadi
+        permintaannya tidak diulang. Kalau sesinya ternyata habis, Moodle
+        mengalihkan ke halaman login sebelum apa pun disimpan; yang muncul
+        LoginDitolak. Kegagalan jaringan sesudah permintaan berangkat menjadi
+        HasilTidakPasti.
+        """
+        with self._kunci:
+            headers = {"Referer": referer} if referer else None
+            try:
+                jawaban = self.minta("POST", alamat, data=isian, headers=headers)
+            except AswayaError as galat:
+                raise HasilTidakPasti(PESAN_TIDAK_PASTI.format(fungsi=alamat, sebab=galat)) from None
+            if self.belum_masuk(jawaban):
+                self.sesskey, self.sudah_masuk = "", False
+                raise LoginDitolak("Sesi web Aswaya habis sebelum form tersimpan; tidak ada yang berubah. Coba lagi.")
+            self.periksa_hambatan(jawaban)
+            if jawaban.status_code >= 400:
+                raise AswayaError(f"{alamat} membalas HTTP {jawaban.status_code}")
             self.tandai_masuk(jawaban)
             return jawaban
 
