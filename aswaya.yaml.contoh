@@ -1,0 +1,39 @@
+# Setelan non-rahasia Aswaya MCP.
+#
+# Salin ke aswaya.yaml lalu ubah yang perlu saja. Semua baris di bawah boleh
+# tetap dikomentari; nilai bawaannya sudah tertulis di tiap baris.
+#
+# Rahasia TIDAK ditaruh di sini. Username, password, dan token ada di .env, yang
+# tidak pernah ikut ter-commit, dan kredensial memang tidak pernah dibaca dari
+# berkas ini. Berkas ini aman dibagikan ke sesama dosen satu perguruan tinggi.
+#
+# Urutan yang menang: argumen pemanggil -> atur_setelan() -> environment -> .env -> aswaya.yaml -> nilai bawaan.
+# Di environment dan .env namanya berawalan ASWAYA_ dan huruf besar
+# (ASWAYA_URL); di berkas ini tanpa awalan dan huruf kecil (url).
+
+# --- Situs -------------------------------------------------------------------
+# Ganti kalau Aswaya pindah alamat, atau untuk Moodle kampus lain. Harus https;
+# Moodle yang terpasang di subdirektori boleh (https://kampus.ac.id/lms).
+# url: https://aswaya.pradita.ac.id
+# nama_instansi: Pradita University   # hanya label pada judul API dan instruksi MCP
+
+# Layanan web service yang dimintai token. moodle_mobile_app adalah layanan
+# aplikasi Moodle di ponsel, yang aktif di Aswaya per Oktober 2026.
+# layanan: moodle_mobile_app
+
+# --- Batas waktu jaringan ------------------------------------------------------
+# Naikkan kalau jaringan ke Aswaya lambat.
+# batas_detik: 60                # login dan panggilan fungsi
+# batas_unduh_detik: 300         # unduhan dan unggahan berkas
+# maks_pengalihan: 5             # pengalihan yang diikuti saat mengunduh dan pada sesi web
+
+# --- Cache token dan sesi web --------------------------------------------------
+# Token hasil login dan cookie sesi web disimpan di $XDG_CACHE_HOME/aswaya-mcp/
+# (bawaannya ~/.cache/aswaya-mcp/) dengan izin 0600, supaya password tidak
+# dipakai setiap kali. Isi "tidak" untuk mematikannya, mis. di komputer bersama.
+# simpan_cache: ya
+
+# --- Lain-lain -----------------------------------------------------------------
+# zona_waktu: Asia/Jakarta       # zona waktu tanggal di keluaran (WIB)
+# umur_sesi_detik: 900           # lama klien per kredensial disimpan REST API
+# user_agent: aswaya-mcp         # User-Agent permintaan HTTP

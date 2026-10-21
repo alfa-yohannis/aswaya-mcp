@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Titik masuk Aswaya MCP. Virtualenv dan dependensinya disiapkan sendiri pada
+# jalankan pertama.
+#
+#   ./aswaya cek-login                 # kredensial di .env bisa dipakai? (nama situs, userid, release)
+#   ./aswaya publik                    # konfigurasi publik situs, tanpa login
+#   ./aswaya kursus [--cari teks]      # kursus yang Anda ikuti
+#   ./aswaya isi <kursus_id>           # section, modul, dan berkas satu kursus
+#   ./aswaya peserta <kursus_id>       # peserta; --lengkap untuk email dan NIM
+#   ./aswaya tugas <kursus_id>         # tugas (assignment) satu kursus
+#   ./aswaya pengumpulan <tugas_id>    # pengumpulan dan nilai per mahasiswa
+#   ./aswaya nilai <kursus_id>         # buku nilai satu kursus (--csv)
+#   ./aswaya forum <kursus_id>         # forum satu kursus
+#   ./aswaya diskusi <forum_id>        # diskusi satu forum
+#   ./aswaya tenggat [--hari 30]       # kegiatan mendatang dari kalender
+#   ./aswaya unduh <url> [--tujuan path]            # unduh berkas Aswaya
+#   ./aswaya fungsi [teks]                          # fungsi web service yang tersedia
+#   ./aswaya panggil <fungsi> [--parameter JSON]    # panggilan generik; --kirim untuk menulis
+#   ./aswaya section <kursus_id>                    # section satu kursus (id, nomor, nama)
+#   ./aswaya umumkan <kursus_id> --subjek ... --isi ...         # uji coba; --kirim untuk mengirim
+#   ./aswaya beri-nilai <tugas_id> <user_id> --nilai N          # uji coba; --kirim untuk mengirim
+#   ./aswaya pesan --ke <user_id> --teks ...                    # uji coba; --kirim untuk mengirim
+#   ./aswaya tambah-section <kursus_id> --nama "Session "{08..14}  # uji coba; --kirim (login web)
+#   ./aswaya ubah-nama-section <kursus_id> <section_id> --nama ... # uji coba; --kirim (login web)
+#   ./aswaya api            # REST API di http://localhost:8000 (PORT=9001 untuk ganti port)
+#   ./aswaya mcp            # MCP server lewat stdio
+#   ./aswaya uji            # unit test
+#
+# ASWAYA_PYTHON menentukan interpreter pembuat virtualenv (bawaan: python3).
+
+set -euo pipefail
+
+AKAR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="${ASWAYA_VENV:-$AKAR/.venv}"
+PYTHON="$VENV/bin/python"
+
+# Akar proyek menentukan letak .env, aswaya.yaml, dan data/, serta titik hitung
+# path relatif. Bawaannya direktori aplikasi ini sendiri; aplikasi tidak pernah
+# menengok ke direktori di atasnya. Ruang kerja yang lebih besar bisa menunjuk
+# direktorinya sendiri lewat ASWAYA_AKAR_PROYEK sebelum memanggil ini.
+export ASWAYA_AKAR_PROYEK="${ASWAYA_AKAR_PROYEK:-$AKAR}"
+
+if [[ ! -x "$PYTHON" ]]; then
+	echo "Membuat virtualenv di $VENV" >&2
+	"${ASWAYA_PYTHON:-python3}" -m venv "$VENV"
+fi
+
+# Penanda ini ikut berubah setiap pyproject.toml disunting, jadi paket baru
+# otomatis terpasang tanpa perlu mengingat menjalankan pip. Dipasang sebagai
+# paket (editable) supaya `import aswaya_mcp` berperilaku persis seperti di
+# proyek lain yang memasangnya.
+PENANDA="$VENV/.paket-terpasang"
+if [[ ! -f "$PENANDA" || "$AKAR/pyproject.toml" -nt "$PENANDA" ]]; then
+	echo "Memasang aswaya-mcp beserta dependensinya" >&2
+	"$VENV/bin/pip" install --quiet --upgrade pip
+	"$VENV/bin/pip" install --quiet -e "$AKAR[semua]"
+	touch "$PENANDA"
+fi
+
+bantuan() {
+	sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+	exit 2
+}
+
+PERINTAH="${1:-}"
+[[ -n "$PERINTAH" ]] || bantuan
+shift
+
+case "$PERINTAH" in
+cek-login) exec "$VENV/bin/aswaya-cek-login" "$@" ;;
+publik) exec "$VENV/bin/aswaya-publik" "$@" ;;
+kursus) exec "$VENV/bin/aswaya-kursus" "$@" ;;
+isi) exec "$VENV/bin/aswaya-isi" "$@" ;;
+peserta) exec "$VENV/bin/aswaya-peserta" "$@" ;;
+tugas) exec "$VENV/bin/aswaya-tugas" "$@" ;;
+pengumpulan) exec "$VENV/bin/aswaya-pengumpulan" "$@" ;;
+nilai) exec "$VENV/bin/aswaya-nilai" "$@" ;;
+forum) exec "$VENV/bin/aswaya-forum" "$@" ;;
+diskusi) exec "$VENV/bin/aswaya-diskusi" "$@" ;;
+tenggat) exec "$VENV/bin/aswaya-tenggat" "$@" ;;
+unduh) exec "$VENV/bin/aswaya-unduh" "$@" ;;
+fungsi) exec "$VENV/bin/aswaya-fungsi" "$@" ;;
+panggil) exec "$VENV/bin/aswaya-panggil" "$@" ;;
+umumkan) exec "$VENV/bin/aswaya-umumkan" "$@" ;;
+beri-nilai) exec "$VENV/bin/aswaya-beri-nilai" "$@" ;;
+pesan) exec "$VENV/bin/aswaya-pesan" "$@" ;;
+section) exec "$VENV/bin/aswaya-section" "$@" ;;
+tambah-section) exec "$VENV/bin/aswaya-tambah-section" "$@" ;;
+ubah-nama-section) exec "$VENV/bin/aswaya-ubah-nama-section" "$@" ;;
+api) exec "$VENV/bin/uvicorn" aswaya_mcp.api:app --port "${PORT:-8000}" "$@" ;;
+mcp) exec "$PYTHON" -m aswaya_mcp.mcp_server "$@" ;;
+uji) exec "$PYTHON" -m pytest "$AKAR/tests" "$@" ;;
+*) bantuan ;;
+esac

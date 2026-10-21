@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aswaya-mcp"
+version = "0.1.0"
+description = "Pakai LMS Aswaya Pradita (Moodle) sebagai pustaka Python, CLI, REST API, atau MCP server"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Alfa Yohannis" }]
+keywords = ["aswaya", "moodle", "lms", "mcp", "pengajaran"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Education",
+    "Topic :: Education",
+]
+
+# Hanya yang dibutuhkan pemakaian sebagai pustaka. FastAPI dan mcp ada di extras
+# supaya proyek yang cuma butuh KlienAswaya tidak ikut memasang keduanya.
+# beautifulsoup4 dipakai sesi web untuk membaca form login dan halaman kursus.
+dependencies = [
+    "requests",
+    "beautifulsoup4",
+    "python-dotenv",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+api = ["fastapi", "uvicorn[standard]"]
+# MCPServer baru ada di mcp 2.x; 1.x memakai nama lama dan tidak bisa dipakai
+mcp = ["mcp>=2"]
+# httpx2 dipakai TestClient Starlette untuk menguji REST API tanpa server
+uji = ["pytest", "httpx2"]
+semua = ["aswaya-mcp[api,mcp,uji]"]
+
+[project.urls]
+Homepage = "https://github.com/alfa-yohannis/aswaya-mcp"
+Issues = "https://github.com/alfa-yohannis/aswaya-mcp/issues"
+
+[project.scripts]
+aswaya-cek-login = "aswaya_mcp.cli:jalankan_cek_login"
+aswaya-publik = "aswaya_mcp.cli:jalankan_publik"
+aswaya-kursus = "aswaya_mcp.cli:jalankan_kursus"
+aswaya-isi = "aswaya_mcp.cli:jalankan_isi"
+aswaya-peserta = "aswaya_mcp.cli:jalankan_peserta"
+aswaya-tugas = "aswaya_mcp.cli:jalankan_tugas"
+aswaya-pengumpulan = "aswaya_mcp.cli:jalankan_pengumpulan"
+aswaya-nilai = "aswaya_mcp.cli:jalankan_nilai"
+aswaya-forum = "aswaya_mcp.cli:jalankan_forum"
+aswaya-diskusi = "aswaya_mcp.cli:jalankan_diskusi"
+aswaya-tenggat = "aswaya_mcp.cli:jalankan_tenggat"
+aswaya-unduh = "aswaya_mcp.cli:jalankan_unduh"
+aswaya-fungsi = "aswaya_mcp.cli:jalankan_fungsi"
+aswaya-panggil = "aswaya_mcp.cli:jalankan_panggil"
+aswaya-umumkan = "aswaya_mcp.cli:jalankan_umumkan"
+aswaya-beri-nilai = "aswaya_mcp.cli:jalankan_beri_nilai"
+aswaya-pesan = "aswaya_mcp.cli:jalankan_pesan"
+aswaya-section = "aswaya_mcp.cli:jalankan_section"
+aswaya-tambah-section = "aswaya_mcp.cli:jalankan_tambah_section"
+aswaya-ubah-nama-section = "aswaya_mcp.cli:jalankan_ubah_nama_section"
+aswaya-mcp = "aswaya_mcp.mcp_server:jalankan"
+
+[tool.setuptools.packages.find]
+include = ["aswaya_mcp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
